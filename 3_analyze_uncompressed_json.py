@@ -1,10 +1,3 @@
-"""
-I decompressed the bz2 once with lbzip2 -dc (parallel decompression, 1-2 mins for the 2.7 GB compressed → 21 GB JSON).
-I then split the file into N byte ranges, one per worker, nudging each boundary forward to the next },{ so no record gets split across chunks.
-Each worker reads only its byte range and scans for "model":"..." with a regex instead of full JSON parsing — the structure is regular enough that regex is
-correct and 10× faster than json.loads. I used multiprocessing.Pool with imap_unordered (capped at cpu_count() - 2 so the OS stays responsive)
-and aggregated the partial Counters. Total runtime: 1m15s on 21 GB of JSON, returning 13 models with ~33M occurrences each.
-"""
 import re
 import os
 from collections import Counter
