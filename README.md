@@ -1,6 +1,6 @@
 # StorPool quiz
 
-My solutions to the four-task quiz. Python where it made sense.
+My solutions to the four-task quiz.
 
 ## Setup
 
@@ -12,29 +12,28 @@ Tested on Python 3.9.
 
 ## 1. Counting — `1_memory_efficient_counting.py`
 
-Count unique uint32 values, and values seen exactly once, in a 4 GB binary file of 1 billion uint32s.
-
-Approach: one 4 GB uint8 array indexed by value, holding `0/1/2` for never/once/many. Stream the file in 10M chunks, use `np.unique(chunk, return_counts=True)` per chunk to dedupe, add capped counts. At the end, `count(state >= 1)` is unique and `count(state == 1)` is seen-once. Same array answers both.
-
-Why 8 bits per slot: I only need 3 states, but 2-bit packing is hard to vectorize in Python, and a full uint32 wastes 4× the RAM. uint8 is the practical sweet spot.
-
-Why dedupe inside each chunk: numpy reads all positions before it writes any, so `state[chunk] += 1` collapses duplicate indices instead of accumulating. `np.unique` avoids that.
-
-Timing: 10M values in ~4s. 1B extrapolates to ~7-8 min.
+I create a 4GB list where I can store solutions, 8 bits per slot.
+I use 8 bits because I need to track 3 states, and 8 is the smallest unit numpy handles natively —
+going smaller (2 bits) is possible but means manual bit shifts that don't vectorize well.
+Then I use numpy because it's faster than Python.
+I process the data in chunks and use np.unique(chunk, return_counts=True) to get the unique values and their counts.
+I use that because numpy processes operations in stages, and the write stage has no context of the other processes —
+so duplicates in a chunk would overwrite each other instead of accumulating.
+For 10M ints we process the data in 4 for 1B it would take up to 15 minutes.
 
 ## 2. FizzBuzz without conditionals or loops — `2_fizzbuzz_with_a_catch.py`
 
 Print 1-100, replacing multiples of 3 with `A`, multiples of 5 with `B`, multiples of 15 with `AB`. No `if`, `for`, `while`, ternary, `try/except`, list comprehensions — anything that branches.
 
-Approach: a tuple indexed by a boolean replaces `if` — booleans in Python are subclasses of `int`, so `(a, b)[some_condition]` picks one. Recursion replaces the loop. Picking the output: a dict keyed by `(n%3==0, n%5==0)` with `.get(key, n)` defaulting to the number itself. Stopping recursion: a 2-tuple of functions `(keep_going, stop)` indexed by `n > 100`, then called.
+A tuple/dict indexed by a boolean replaces `if` — booleans in Python are subclasses of `int`, so `(a, b)[some_condition]` picks one. Recursion replaces the loop. Picking the output: a dict keyed by `(n%3==0, n%5==0)` with `.get(key, n)` defaulting to the number itself. Stopping recursion: a dispatch dict `{False: keep_going, True: lambda *_: None}` keyed by `n > 100`.
 
 ## 3. Disk model counts — `3_analyze_uncompressed_json.py`
 
-Count distinct disk models in `bigf.json.bz2` and how often each appears.
-
-Approach: decompress once (`lbzip2 -dc bigf.json.bz2 > bigf.json` — ~30s for 2.7 GB → 21 GB). Split the file into N byte ranges, one per worker. Each boundary is nudged forward to the next `},{` so no record is split. Each worker scans its range with a regex (`"model":"..."`) instead of `json.loads` — the structure is regular enough that regex is correct and ~10× faster. `multiprocessing.Pool` with `imap_unordered`, capped at `cpu_count() - 2`. Aggregate Counters at the end.
-
-Timing: ~1m15s on 21 GB. 13 distinct models, ~33M occurrences each.
+I decompressed the bz2 once with lbzip2 -dc (parallel decompression, 1-2 mins for the 2.7 GB compressed → 21 GB JSON).
+I then split the file into N byte ranges, one per worker, nudging each boundary forward to the next },{ so no record gets split across chunks.
+Each worker reads only its byte range and scans for "model":"..." with a regex instead of full JSON parsing — the structure is regular enough that regex is
+correct and 10× faster than json.loads. I used multiprocessing.Pool with imap_unordered (capped at cpu_count() - 2 so the OS stays responsive)
+and aggregated the partial Counters. Total runtime: 1m15s on 21 GB of JSON, returning 13 models with ~33M occurrences each.
 
 ## 4. Reverse engineering
 
