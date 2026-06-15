@@ -1,12 +1,12 @@
 """
 I create a 4GB list where I can store solutions, 8 bits per slot.
-I use 8 bits because I need to track 3 states, and 8 is the smallest unit numpy handles natively — going
-smaller (2 bits) is possible but means manual bit shifts that don't vectorize well.
+I use 8 bits because I need to track 3 states, and 8 is the smallest unit numpy handles natively —
+going smaller (2 bits) is possible but means manual bit shifts that don't vectorize well.
 Then I use numpy because it's faster than Python.
 I process the data in chunks and use np.unique(chunk, return_counts=True) to get the unique values and their counts.
-I use that because numpy processes operations in stages, and the write stage has no context of the other processes — so duplicates in a chunk
-would overwrite each other instead of accumulating.
-For 10M ints we process the data in 4 seconds; for 1B it would take up to 15 minutes.
+I use that because numpy processes operations in stages, and the write stage has no context of the other processes —
+so duplicates in a chunk would overwrite each other instead of accumulating.
+For 10M ints we process the data in 4 for 1B it would take up to 15 minutes.
 """
 
 import time
